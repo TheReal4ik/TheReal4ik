@@ -10,16 +10,23 @@ from excel_utils import (
     append_cross_connect_record,
     delete_cross_connect_record,
     get_cross_connect_record,
+    get_occupied_ports,
+    get_port_record,
     list_data_files,
     read_cross_connect_records,
+    update_cross_connect_record,
 )
 from keyboards import (
+    EXPORT_BUTTON_TEXT,
+    MENU_BUTTON_TEXT,
     comment_kb,
     confirm_delete_kb,
     delete_floors_kb,
     export_files_kb,
     floors_kb,
     main_menu_kb,
+    persistent_menu_kb,
+    port_occupied_kb,
     ports_kb,
     records_kb,
     segments_kb,
@@ -33,7 +40,8 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("Привет! Выберите раздел:", reply_markup=main_menu_kb())
+    await message.answer("Меню всегда под рукой 👇", reply_markup=persistent_menu_kb())
+    await message.answer("Выберите раздел:", reply_markup=main_menu_kb())
 
 
 @router.message(Command("cancel"))
@@ -49,6 +57,17 @@ async def cmd_export(message: Message) -> None:
         await message.answer("Пока нет ни одного сохранённого файла.")
         return
     await message.answer("Выберите файл для выгрузки:", reply_markup=export_files_kb(files))
+
+
+@router.message(F.text == MENU_BUTTON_TEXT)
+async def menu_button(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Выберите раздел:", reply_markup=main_menu_kb())
+
+
+@router.message(F.text == EXPORT_BUTTON_TEXT)
+async def export_button(message: Message) -> None:
+    await cmd_export(message)
 
 
 @router.callback_query(F.data.startswith("export:"))
@@ -131,10 +150,11 @@ async def choose_switch(callback: CallbackQuery, state: FSMContext) -> None:
     switch = int(callback.data.split(":")[1])
     data = await state.update_data(switch=switch)
     await state.set_state(CrossConnectForm.choosing_port)
+    occupied = get_occupied_ports(data["floor"], data["segment"], switch, PORTS_PER_SWITCH)
     await callback.message.edit_text(
         f"Этаж {data['floor']}, сегмент {data['segment']}, коммутатор {switch}\n"
-        f"Выберите порт:",
-        reply_markup=ports_kb(),
+        f"Выберите порт (🟢 свободен, 🔴 занят):",
+        reply_markup=ports_kb(occupied),
     )
     await callback.answer()
 
@@ -154,11 +174,42 @@ async def back_to_switch(callback: CallbackQuery, state: FSMContext) -> None:
 async def choose_port(callback: CallbackQuery, state: FSMContext) -> None:
     port = int(callback.data.split(":")[1])
     data = await state.update_data(port=port)
+
+    record = get_port_record(data["floor"], data["segment"], data["switch"], port, PORTS_PER_SWITCH)
+    if record:
+        _row_idx, _segment, _switch, overall_port, scs_number, comment = record
+        await state.set_state(CrossConnectForm.port_occupied)
+        await callback.message.edit_text(
+            f"Этаж {data['floor']}, сегмент {data['segment']}, "
+            f"коммутатор {data['switch']}, порт {port} (сквозной {overall_port}) — занят.\n\n"
+            f"Текущий номер СКС: {scs_number}\n"
+            f"Текущий комментарий: {comment or '—'}\n\n"
+            f"Что сделать?",
+            reply_markup=port_occupied_kb(),
+        )
+        await callback.answer()
+        return
+
+    await state.update_data(edit_row_idx=None)
     await state.set_state(CrossConnectForm.entering_scs)
     await callback.message.edit_text(
         f"Этаж {data['floor']}, сегмент {data['segment']}, "
         f"коммутатор {data['switch']}, порт {port}\n\n"
         f"Введите номер СКС-порта:"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "portedit:go", CrossConnectForm.port_occupied)
+async def edit_occupied_port(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    record = get_port_record(data["floor"], data["segment"], data["switch"], data["port"], PORTS_PER_SWITCH)
+    await state.update_data(edit_row_idx=record[0] if record else None)
+    await state.set_state(CrossConnectForm.entering_scs)
+    await callback.message.edit_text(
+        f"Этаж {data['floor']}, сегмент {data['segment']}, "
+        f"коммутатор {data['switch']}, порт {data['port']}\n\n"
+        f"Введите новый номер СКС-порта:"
     )
     await callback.answer()
 
@@ -194,21 +245,33 @@ async def save_cross_connect_record(
     callback: CallbackQuery | None = None,
 ) -> None:
     data = await state.get_data()
-    path = append_cross_connect_record(
-        floor=data["floor"],
-        segment=data["segment"],
-        switch=data["switch"],
-        port=data["port"],
-        scs_number=data["scs_number"],
-        comment=comment,
-        ports_per_switch=PORTS_PER_SWITCH,
-    )
+    edit_row_idx = data.get("edit_row_idx")
+    overall_port = (data["switch"] - 1) * PORTS_PER_SWITCH + data["port"]
+
+    if edit_row_idx:
+        update_cross_connect_record(
+            floor=data["floor"],
+            row_idx=edit_row_idx,
+            scs_number=data["scs_number"],
+            comment=comment,
+        )
+        header = "✅ Запись обновлена"
+    else:
+        path = append_cross_connect_record(
+            floor=data["floor"],
+            segment=data["segment"],
+            switch=data["switch"],
+            port=data["port"],
+            scs_number=data["scs_number"],
+            comment=comment,
+            ports_per_switch=PORTS_PER_SWITCH,
+        )
+        header = f"✅ Запись сохранена в {os.path.basename(path)}"
+
     await state.clear()
 
-    overall_port = (data["switch"] - 1) * PORTS_PER_SWITCH + data["port"]
     text = (
-        "✅ Запись сохранена в "
-        f"{os.path.basename(path)}\n\n"
+        f"{header}\n\n"
         f"Этаж: {data['floor']}\n"
         f"Сегмент: {data['segment']}\n"
         f"Коммутатор: {data['switch']}\n"

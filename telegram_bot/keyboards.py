@@ -1,9 +1,20 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from config import FLOORS, PORTS_PER_SWITCH, SEGMENTS, SWITCHES_IN_STACK
 
 RECORDS_PAGE_SIZE = 8
+
+MENU_BUTTON_TEXT = "🏠 Главное меню"
+EXPORT_BUTTON_TEXT = "📤 Экспорт"
+
+
+def persistent_menu_kb() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=MENU_BUTTON_TEXT)
+    builder.button(text=EXPORT_BUTTON_TEXT)
+    builder.adjust(2)
+    return builder.as_markup(resize_keyboard=True)
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
@@ -51,10 +62,11 @@ def switches_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def ports_kb() -> InlineKeyboardMarkup:
+def ports_kb(occupied_ports: set[int]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for port in range(1, PORTS_PER_SWITCH + 1):
-        builder.button(text=str(port), callback_data=f"port:{port}")
+        marker = "🔴" if port in occupied_ports else "🟢"
+        builder.button(text=f"{marker}{port}", callback_data=f"port:{port}")
     builder.button(text="⬅️ Назад", callback_data="back:switch")
     builder.adjust(8)
     return builder.as_markup()
@@ -63,6 +75,14 @@ def ports_kb() -> InlineKeyboardMarkup:
 def comment_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="Без комментария", callback_data="comment:skip")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def port_occupied_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✏️ Редактировать", callback_data="portedit:go")
+    builder.button(text="❌ Отмена", callback_data="back:switch")
     builder.adjust(1)
     return builder.as_markup()
 

@@ -6,6 +6,7 @@ class CrossConnectForm(StatesGroup):
     choosing_segment = State()
     choosing_switch = State()
     choosing_port = State()
+    port_occupied = State()
     entering_scs = State()
     entering_comment = State()
 

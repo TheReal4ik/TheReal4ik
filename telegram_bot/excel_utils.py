@@ -98,3 +98,41 @@ def delete_cross_connect_record(floor: int, row_idx: int) -> bool:
     worksheet.delete_rows(row_idx)
     workbook.save(path)
     return True
+
+
+def update_cross_connect_record(floor: int, row_idx: int, scs_number: str, comment: str) -> bool:
+    path = cross_connect_filename(floor)
+    if not os.path.exists(path):
+        return False
+
+    workbook = load_workbook(path)
+    worksheet = workbook.active
+    if row_idx < 2 or row_idx > worksheet.max_row:
+        return False
+
+    worksheet.cell(row=row_idx, column=1, value=datetime.now().strftime("%Y-%m-%d %H:%M"))
+    worksheet.cell(row=row_idx, column=5, value=scs_number)
+    worksheet.cell(row=row_idx, column=6, value=comment or "")
+    workbook.save(path)
+    return True
+
+
+def get_occupied_ports(floor: int, segment: str, switch: int, ports_per_switch: int) -> set[int]:
+    occupied = set()
+    for _row_idx, rec_segment, rec_switch, overall_port, _scs, _comment in read_cross_connect_records(floor):
+        if rec_segment == segment and rec_switch == switch:
+            port = overall_port - (switch - 1) * ports_per_switch
+            if 1 <= port <= ports_per_switch:
+                occupied.add(port)
+    return occupied
+
+
+def get_port_record(
+    floor: int, segment: str, switch: int, port: int, ports_per_switch: int
+) -> tuple | None:
+    overall_port = (switch - 1) * ports_per_switch + port
+    for record in read_cross_connect_records(floor):
+        _row_idx, rec_segment, rec_switch, rec_overall_port, _scs, _comment = record
+        if rec_segment == segment and rec_switch == switch and rec_overall_port == overall_port:
+            return record
+    return None
