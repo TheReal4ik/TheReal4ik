@@ -53,6 +53,22 @@ def segments_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def printer_domains_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for domain in SEGMENTS:
+        builder.button(text=domain, callback_data=f"prdomain:{domain}")
+    builder.button(text="⬅️ В меню", callback_data="back:main")
+    builder.adjust(2, 1)
+    return builder.as_markup()
+
+
+def printer_skip_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Пропустить", callback_data="prskip")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def switches_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for switch in range(1, SWITCHES_IN_STACK + 1):

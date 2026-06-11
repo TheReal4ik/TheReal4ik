@@ -14,3 +14,12 @@ class CrossConnectForm(StatesGroup):
 class DeleteRecordForm(StatesGroup):
     choosing_floor = State()
     choosing_record = State()
+
+
+class PrinterForm(StatesGroup):
+    choosing_domain = State()
+    entering_model = State()
+    entering_serial = State()
+    entering_ip = State()
+    entering_sberprint_id = State()
+    entering_location = State()

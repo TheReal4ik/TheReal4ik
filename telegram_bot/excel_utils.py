@@ -14,9 +14,57 @@ CROSS_CONNECT_HEADERS = [
     "Комментарий",
 ]
 
+PRINTER_HEADERS = [
+    "Дата",
+    "Домен",
+    "Модель",
+    "Серийный номер",
+    "IP адрес",
+    "Сберпечать ID",
+    "Расположение",
+]
+
 
 def cross_connect_filename(floor: int) -> str:
     return os.path.join(DATA_DIR, f"Кроссовая_Этаж_{floor}.xlsx")
+
+
+def printer_filename(domain: str) -> str:
+    return os.path.join(DATA_DIR, f"Принтеры_{domain}.xlsx")
+
+
+def append_printer_record(
+    domain: str,
+    model: str,
+    serial: str,
+    ip: str,
+    sberprint_id: str,
+    location: str,
+) -> str:
+    path = printer_filename(domain)
+
+    if os.path.exists(path):
+        workbook = load_workbook(path)
+        worksheet = workbook.active
+    else:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = f"Принтеры {domain}"
+        worksheet.append(PRINTER_HEADERS)
+
+    worksheet.append(
+        [
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            domain,
+            model,
+            serial,
+            ip,
+            sberprint_id,
+            location,
+        ]
+    )
+    workbook.save(path)
+    return path
 
 
 def append_cross_connect_record(
