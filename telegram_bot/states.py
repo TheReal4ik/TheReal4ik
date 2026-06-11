@@ -8,3 +8,8 @@ class CrossConnectForm(StatesGroup):
     choosing_port = State()
     entering_scs = State()
     entering_comment = State()
+
+
+class DeleteRecordForm(StatesGroup):
+    choosing_floor = State()
+    choosing_record = State()
