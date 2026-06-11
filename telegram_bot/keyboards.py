@@ -53,11 +53,20 @@ def segments_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def printer_floors_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for floor in FLOORS:
+        builder.button(text=f"Этаж {floor}", callback_data=f"prfloor:{floor}")
+    builder.button(text="⬅️ В меню", callback_data="back:main")
+    builder.adjust(3)
+    return builder.as_markup()
+
+
 def printer_domains_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for domain in SEGMENTS:
         builder.button(text=domain, callback_data=f"prdomain:{domain}")
-    builder.button(text="⬅️ В меню", callback_data="back:main")
+    builder.button(text="⬅️ Назад", callback_data="prback:floor")
     builder.adjust(2, 1)
     return builder.as_markup()
 

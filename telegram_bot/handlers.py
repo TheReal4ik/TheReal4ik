@@ -30,6 +30,7 @@ from keyboards import (
     port_occupied_kb,
     ports_kb,
     printer_domains_kb,
+    printer_floors_kb,
     printer_skip_kb,
     records_kb,
     segments_kb,
@@ -86,10 +87,10 @@ async def export_file(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "menu:printers")
 async def menu_printers(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(PrinterForm.choosing_domain)
+    await state.set_state(PrinterForm.choosing_floor)
     await callback.message.edit_text(
-        "🖨 Принтеры. Выберите домен:",
-        reply_markup=printer_domains_kb(),
+        "🖨 Принтеры. Выберите этаж:",
+        reply_markup=printer_floors_kb(),
     )
     await callback.answer()
 
@@ -391,13 +392,35 @@ async def delete_confirm(callback: CallbackQuery, state: FSMContext) -> None:
 # ---------- Принтеры ----------
 
 
+@router.callback_query(F.data.startswith("prfloor:"), PrinterForm.choosing_floor)
+async def printer_choose_floor(callback: CallbackQuery, state: FSMContext) -> None:
+    floor = int(callback.data.split(":")[1])
+    await state.update_data(floor=floor)
+    await state.set_state(PrinterForm.choosing_domain)
+    await callback.message.edit_text(
+        f"🖨 Этаж {floor}. Выберите домен:",
+        reply_markup=printer_domains_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "prback:floor", PrinterForm.choosing_domain)
+async def printer_back_to_floor(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(PrinterForm.choosing_floor)
+    await callback.message.edit_text(
+        "🖨 Принтеры. Выберите этаж:",
+        reply_markup=printer_floors_kb(),
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("prdomain:"), PrinterForm.choosing_domain)
 async def printer_choose_domain(callback: CallbackQuery, state: FSMContext) -> None:
     domain = callback.data.split(":", 1)[1]
-    await state.update_data(domain=domain)
+    data = await state.update_data(domain=domain)
     await state.set_state(PrinterForm.entering_model)
     await callback.message.edit_text(
-        f"🖨 Домен {domain}.\n\nВведите модель принтера:"
+        f"🖨 Этаж {data['floor']}, домен {domain}.\n\nВведите модель принтера:"
     )
     await callback.answer()
 
@@ -493,6 +516,7 @@ async def _save_printer_record(
 ) -> None:
     data = await state.get_data()
     path = append_printer_record(
+        floor=data["floor"],
         domain=data["domain"],
         model=data["model"],
         serial=data.get("serial", ""),
@@ -504,6 +528,7 @@ async def _save_printer_record(
 
     text = (
         f"✅ Принтер сохранён в {os.path.basename(path)}\n\n"
+        f"Этаж: {data['floor']}\n"
         f"Домен: {data['domain']}\n"
         f"Модель: {data['model']}\n"
         f"Серийный номер: {data.get('serial') or '—'}\n"

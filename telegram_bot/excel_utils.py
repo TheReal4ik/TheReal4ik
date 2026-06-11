@@ -16,6 +16,7 @@ CROSS_CONNECT_HEADERS = [
 
 PRINTER_HEADERS = [
     "Дата",
+    "Этаж",
     "Домен",
     "Модель",
     "Серийный номер",
@@ -29,11 +30,12 @@ def cross_connect_filename(floor: int) -> str:
     return os.path.join(DATA_DIR, f"Кроссовая_Этаж_{floor}.xlsx")
 
 
-def printer_filename(domain: str) -> str:
-    return os.path.join(DATA_DIR, f"Принтеры_{domain}.xlsx")
+def printer_filename(floor: int) -> str:
+    return os.path.join(DATA_DIR, f"Принтеры_Этаж_{floor}.xlsx")
 
 
 def append_printer_record(
+    floor: int,
     domain: str,
     model: str,
     serial: str,
@@ -41,7 +43,7 @@ def append_printer_record(
     sberprint_id: str,
     location: str,
 ) -> str:
-    path = printer_filename(domain)
+    path = printer_filename(floor)
 
     if os.path.exists(path):
         workbook = load_workbook(path)
@@ -49,12 +51,13 @@ def append_printer_record(
     else:
         workbook = Workbook()
         worksheet = workbook.active
-        worksheet.title = f"Принтеры {domain}"
+        worksheet.title = f"Принтеры Этаж {floor}"
         worksheet.append(PRINTER_HEADERS)
 
     worksheet.append(
         [
             datetime.now().strftime("%Y-%m-%d %H:%M"),
+            floor,
             domain,
             model,
             serial,

@@ -17,6 +17,7 @@ class DeleteRecordForm(StatesGroup):
 
 
 class PrinterForm(StatesGroup):
+    choosing_floor = State()
     choosing_domain = State()
     entering_model = State()
     entering_serial = State()
