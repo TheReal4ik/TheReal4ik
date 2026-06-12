@@ -31,8 +31,9 @@ from keyboards import (
     ports_kb,
     printer_domains_kb,
     printer_floors_kb,
-    printer_skip_kb,
+    printer_step_kb,
     records_kb,
+    scs_input_kb,
     segments_kb,
     switches_kb,
 )
@@ -199,7 +200,8 @@ async def choose_port(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_text(
         f"Этаж {data['floor']}, сегмент {data['segment']}, "
         f"коммутатор {data['switch']}, порт {port}\n\n"
-        f"Введите номер СКС-порта:"
+        f"Введите номер СКС-порта:",
+        reply_markup=scs_input_kb(),
     )
     await callback.answer()
 
@@ -213,7 +215,35 @@ async def edit_occupied_port(callback: CallbackQuery, state: FSMContext) -> None
     await callback.message.edit_text(
         f"Этаж {data['floor']}, сегмент {data['segment']}, "
         f"коммутатор {data['switch']}, порт {data['port']}\n\n"
-        f"Введите новый номер СКС-порта:"
+        f"Введите новый номер СКС-порта:",
+        reply_markup=scs_input_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back:port", CrossConnectForm.entering_scs)
+async def back_to_port_from_scs(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.set_state(CrossConnectForm.choosing_port)
+    occupied = get_occupied_ports(data["floor"], data["segment"], data["switch"], PORTS_PER_SWITCH)
+    await callback.message.edit_text(
+        f"Этаж {data['floor']}, сегмент {data['segment']}, коммутатор {data['switch']}\n"
+        f"Выберите порт (🟢 свободен, 🔴 занят):",
+        reply_markup=ports_kb(occupied),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back:scs", CrossConnectForm.entering_comment)
+async def back_to_scs_from_comment(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.set_state(CrossConnectForm.entering_scs)
+    overall_port = (data["switch"] - 1) * PORTS_PER_SWITCH + data["port"]
+    await callback.message.edit_text(
+        f"Этаж {data['floor']}, сегмент {data['segment']}, "
+        f"коммутатор {data['switch']}, порт {data['port']} (сквозной {overall_port})\n\n"
+        f"Введите номер СКС-порта:",
+        reply_markup=scs_input_kb(),
     )
     await callback.answer()
 
@@ -420,7 +450,19 @@ async def printer_choose_domain(callback: CallbackQuery, state: FSMContext) -> N
     data = await state.update_data(domain=domain)
     await state.set_state(PrinterForm.entering_model)
     await callback.message.edit_text(
-        f"🖨 Этаж {data['floor']}, домен {domain}.\n\nВведите модель принтера:"
+        f"🖨 Этаж {data['floor']}, домен {domain}.\n\nВведите модель принтера:",
+        reply_markup=printer_step_kb("prback:domain", skip=False),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "prback:domain", PrinterForm.entering_model)
+async def printer_back_to_domain(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.set_state(PrinterForm.choosing_domain)
+    await callback.message.edit_text(
+        f"🖨 Этаж {data['floor']}. Выберите домен:",
+        reply_markup=printer_domains_kb(),
     )
     await callback.answer()
 
@@ -434,8 +476,20 @@ async def printer_enter_model(message: Message, state: FSMContext) -> None:
     await state.update_data(model=model)
     await state.set_state(PrinterForm.entering_serial)
     await message.answer(
-        "Введите серийный номер (или «Пропустить»):", reply_markup=printer_skip_kb()
+        "Введите серийный номер (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:model"),
     )
+
+
+@router.callback_query(F.data == "prback:model", PrinterForm.entering_serial)
+async def printer_back_to_model(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.set_state(PrinterForm.entering_model)
+    await callback.message.edit_text(
+        f"🖨 Этаж {data['floor']}, домен {data['domain']}.\n\nВведите модель принтера:",
+        reply_markup=printer_step_kb("prback:domain", skip=False),
+    )
+    await callback.answer()
 
 
 @router.message(PrinterForm.entering_serial)
@@ -454,8 +508,19 @@ async def printer_skip_serial(callback: CallbackQuery, state: FSMContext) -> Non
 async def _printer_ask_ip(message: Message, state: FSMContext) -> None:
     await state.set_state(PrinterForm.entering_ip)
     await message.answer(
-        "Введите IP-адрес (или «Пропустить»):", reply_markup=printer_skip_kb()
+        "Введите IP-адрес (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:serial"),
     )
+
+
+@router.callback_query(F.data == "prback:serial", PrinterForm.entering_ip)
+async def printer_back_to_serial(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(PrinterForm.entering_serial)
+    await callback.message.edit_text(
+        "Введите серийный номер (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:model"),
+    )
+    await callback.answer()
 
 
 @router.message(PrinterForm.entering_ip)
@@ -474,8 +539,19 @@ async def printer_skip_ip(callback: CallbackQuery, state: FSMContext) -> None:
 async def _printer_ask_sberprint(message: Message, state: FSMContext) -> None:
     await state.set_state(PrinterForm.entering_sberprint_id)
     await message.answer(
-        "Введите Сберпечать ID (или «Пропустить»):", reply_markup=printer_skip_kb()
+        "Введите Сберпечать ID (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:ip"),
     )
+
+
+@router.callback_query(F.data == "prback:ip", PrinterForm.entering_sberprint_id)
+async def printer_back_to_ip(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(PrinterForm.entering_ip)
+    await callback.message.edit_text(
+        "Введите IP-адрес (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:serial"),
+    )
+    await callback.answer()
 
 
 @router.message(PrinterForm.entering_sberprint_id)
@@ -494,8 +570,19 @@ async def printer_skip_sberprint(callback: CallbackQuery, state: FSMContext) -> 
 async def _printer_ask_location(message: Message, state: FSMContext) -> None:
     await state.set_state(PrinterForm.entering_location)
     await message.answer(
-        "Введите расположение (или «Пропустить»):", reply_markup=printer_skip_kb()
+        "Введите расположение (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:sberprint"),
     )
+
+
+@router.callback_query(F.data == "prback:sberprint", PrinterForm.entering_location)
+async def printer_back_to_sberprint(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(PrinterForm.entering_sberprint_id)
+    await callback.message.edit_text(
+        "Введите Сберпечать ID (или «Пропустить»):",
+        reply_markup=printer_step_kb("prback:ip"),
+    )
+    await callback.answer()
 
 
 @router.message(PrinterForm.entering_location)

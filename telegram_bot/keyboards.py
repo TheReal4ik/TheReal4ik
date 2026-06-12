@@ -71,9 +71,18 @@ def printer_domains_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def printer_skip_kb() -> InlineKeyboardMarkup:
+def printer_step_kb(back_callback: str, skip: bool = True) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="Пропустить", callback_data="prskip")
+    if skip:
+        builder.button(text="Пропустить", callback_data="prskip")
+    builder.button(text="⬅️ Назад", callback_data=back_callback)
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def scs_input_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⬅️ Назад", callback_data="back:port")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -100,6 +109,7 @@ def ports_kb(occupied_ports: set[int]) -> InlineKeyboardMarkup:
 def comment_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="Без комментария", callback_data="comment:skip")
+    builder.button(text="⬅️ Назад", callback_data="back:scs")
     builder.adjust(1)
     return builder.as_markup()
 
